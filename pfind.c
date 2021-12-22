@@ -27,7 +27,7 @@ typedef struct directoryNode {
 
 } directoryNode;
 
-static thead * create_list(void) {
+static thead * create_sleep_list(void) {
     ThreadNode * head = (ThreadNode*)malloc(sizeof(thead));
     if(head == NULL) {
         exit(1);
@@ -37,7 +37,7 @@ static thead * create_list(void) {
     return head;
 }
 
-static thead * create_list(void) {
+static thead * create_directory_list(void) {
     directoryNode * head = (directoryNode*)malloc(sizeof(dhead));
     if(head == NULL) {
         exit(1);
