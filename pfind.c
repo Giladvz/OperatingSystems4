@@ -5,25 +5,45 @@
 #include <string.h>
 #include <limits.h>
 
-typdef struct thread_head {
-    thread_Node * head;
-    thread_Node * tail;
+typdef struct threadHead {
+    threadNode * head;
+    threadNode * tail;
 }thead;
 
-typdef struct directory_head {
-     * head;
-    thread_Node * tail;
+typdef struct directoryHead {
+    directoryNode * head;
+    directoryNode * tail;
 }dhead;
 
-typedef struct thread_Node {
-    int thread_id;
-    thread_Node  * next;
+typedef struct threadNode {
+    int id;
+    threadNode  * next;
 
-}thread_Node;
+}threadNode;
 
-typedef struct directory_Node {
+typedef struct directoryNode {
     char * [PATH_MAX];
     directory_Node  * next;
 
-} directory_Node;
+} directoryNode;
+
+static thead * create_list(void) {
+    ThreadNode * head = (ThreadNode*)malloc(sizeof(thead));
+    if(head == NULL) {
+        exit(1);
+    }
+    head -> head = NULL;
+    head -> tail = NULL;
+    return head;
+}
+
+static thead * create_list(void) {
+    directoryNode * head = (directoryNode*)malloc(sizeof(dhead));
+    if(head == NULL) {
+        exit(1);
+    }
+    head -> head = NULL;
+    head -> tail = NULL;
+    return head;
+}
 
