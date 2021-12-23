@@ -7,6 +7,10 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+pthread_mutex_t mutex;
+pthread_cond_t isHeadCV;
+pthread_cond_t isNotHeadCV;
+
 typedef struct threadNode {
     int id;
     struct threadNode * next;
@@ -98,11 +102,21 @@ int isDirQEmpty(dhead * head){
 void * startDirCheck(void* num){
     long my_id = (long)num;
     printf("Starting thread number %lu",my_id);
+    pthread_cond_wait(isHeadCV);
     return 0;
 }
 
 int main(int argc, char* argv[]) {
     long i;
+    dhead directoryList;
+    thead threadSleepList;
+    int isEveryOneAsleep;
+
+
+    pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&isHeadCV, NULL);
+    pthread_cond_init(&isNotHeadCV, NULL);
+
     if (argc != 4) {
         printf("There should be 3 paramaters\n");
         exit(1);
@@ -117,6 +131,13 @@ int main(int argc, char* argv[]) {
         printf("Error closing dir");
         exit(1);
     }
+
+    // Creating queues
+    directoryList = create_directory_list();
+    threadSleepList = create_sleep_list();
+    // Adding root directory to queue
+    add_directory_node(directoryList,argv[1]);
+
     pthread_t * threads = (pthread_t *)calloc(threadNum,sizeof(pthread_t));
     for (i=0; i<threadNum;i++){
         if ((pthread_create(&threads[i], NULL, startDirCheck, (void *)i)) < 0) {
@@ -124,12 +145,14 @@ int main(int argc, char* argv[]) {
             exit(1);
         }
     }
-
+    sleep 1;
 
 
     for (int i = 0; i < threadNum; i++) {
         pthread_join(threads[i], NULL);
     }
     // Clean up and exit
-
+    pthread_mutex_destroy(mutex);
+    pthread_cond_destroy(isHeadCV);
+    pthread_cond_destroy(isNotHeadCV);
 }
