@@ -7,9 +7,16 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-pthread_mutex_t mutex;
+pthread_mutex_t dirMutex;
+pthread_mutex_t threadMutex;
 pthread_cond_t isHeadCV;
 pthread_cond_t isNotHeadCV;
+dhead *directoryList;
+thead *threadSleepList;
+int firstRun = 0;
+atomic_int sleeping = 0;
+atomic_int dead = 0;
+int threadNum;
 
 typedef struct threadNode {
     int id;
@@ -101,19 +108,35 @@ int isDirQEmpty(dhead * head){
 
 void * startDirCheck(void* num){
     long my_id = (long)num;
-    printf("Starting thread number %lu",my_id);
+    char * path[PATH_MAX];
     pthread_cond_wait(isHeadCV);
+    pthread_mutex_lock(dirMutex);
+    // Fist run, 1 gets the file, the rest go to sleep
+    if (firstRun) {
+        // Add to thread sleeping list
+    }
+    else {
+        firstRun = 1;
+        strcpy(path, directoryList->head->path);
+        remove_directory_node(directoryList);
+        pthread_mutex_unlock(dirMutex);
+        searchDir(path);
+    }
+    while (isEveryOneWorking){
+        while (!isDirQEmpty()){
+            //searchDir()
+        }
+    }
     return 0;
 }
 
 int main(int argc, char* argv[]) {
     long i;
-    dhead directoryList;
-    thead threadSleepList;
+
     int isEveryOneAsleep;
 
-
-    pthread_mutex_init(&mutex, NULL);
+    pthread_mutex_init(&dirMutex, NULL);
+    pthread_mutex_init(&threadMutex, NULL);
     pthread_cond_init(&isHeadCV, NULL);
     pthread_cond_init(&isNotHeadCV, NULL);
 
@@ -121,7 +144,7 @@ int main(int argc, char* argv[]) {
         printf("There should be 3 paramaters\n");
         exit(1);
     }
-    int threadNum = atoi(argv[3]);
+    threadNum = atoi(argv[3]);
     DIR * check_dir = opendir(argv[1]);
     if (check_dir == NULL) {
         printf("Directory %s: Permission denied.\n",argv[1]);
@@ -146,13 +169,14 @@ int main(int argc, char* argv[]) {
         }
     }
     sleep 1;
-
+    pthread_cond_broadcast(isHeadCV);
 
     for (int i = 0; i < threadNum; i++) {
         pthread_join(threads[i], NULL);
     }
     // Clean up and exit
-    pthread_mutex_destroy(mutex);
+    pthread_mutex_destroy(dirMutex);
+    pthread_mutex_destroy(threadMutex);
     pthread_cond_destroy(isHeadCV);
     pthread_cond_destroy(isNotHeadCV);
 }
