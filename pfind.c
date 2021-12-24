@@ -196,30 +196,45 @@ void * startDirCheck(void* num) {
     char path[PATH_MAX];
     int loc;
 
-    pthread_mutex_lock(&threadMutex);
     sleeping++;
     pthread_cond_wait(&start,&threadMutex);
     sleeping--;
     pthread_mutex_unlock(&threadMutex);
-
+    perror("going in");
     while ((dead + sleeping != threadNum) || (!isDirQEmpty(directoryList))) {
         pthread_mutex_lock(&threadMutex);
         add_thread_node(threadSleepList,my_id);
+        perror("Adding thread to list");
         pthread_mutex_unlock(&threadMutex);
+        pthread_mutex_lock(&dirMutex);
         if (isDirQEmpty(directoryList)) {
             sleeping++;
+            perror("thread is on way of sleep");
             // Everyone is asleep and the directory folder is empty. Last thread starts exit process
             if (dead + sleeping == threadNum) {
                 // Tell main to set other threads free
+                perror("c");
+                printf("MY id is %ld", my_id);
+                loc = getThreadLocation(threadSleepList,my_id);
+                perror("1");
+                removeThreadNode(threadSleepList,loc);
+                perror("2");
+                pthread_mutex_unlock(&dirMutex);
+                perror("3");
                 pthread_cond_signal(&start);
                 break;
             }
-            pthread_cond_wait(&cvArray[my_id],&threadMutex);
+            perror("B");
+            pthread_cond_wait(&cvArray[my_id],&dirMutex);
+
             // Need to break to exit properly. Checks if main set the thread free
             if (dead + sleeping == threadNum && isDirQEmpty(directoryList)) {
+                loc = getThreadLocation(threadSleepList,my_id);
+                pthread_mutex_unlock(&dirMutex);
                 break;
             }
             sleeping--;
+            pthread_mutex_unlock(&dirMutex);
             pthread_mutex_lock(&removeMutex);
             loc = getThreadLocation(threadSleepList,my_id);
             removeThreadNode(threadSleepList,loc);
@@ -228,16 +243,18 @@ void * startDirCheck(void* num) {
             searchDir(path);
         }
         else {
+            pthread_mutex_unlock(&dirMutex);
             pthread_mutex_lock(&removeMutex);
             loc = getThreadLocation(threadSleepList,my_id);
             if (loc > directoryList -> size){
                 sleeping++;
                 pthread_cond_wait(&cvArray[my_id],&removeMutex);
-                if (dead + sleeping == threadNum && isDirQEmpty(directoryList)) {
+                loc = getThreadLocation(threadSleepList,my_id);
+                if ((dead + sleeping == threadNum) && (isDirQEmpty(directoryList))) {
+                    pthread_mutex_unlock(&removeMutex);
                     break;
                 }
                 sleeping--;
-                loc = getThreadLocation(threadSleepList,my_id);
             }
             removeThreadNode(threadSleepList,loc);
             strcpy(path, remove_directory_node(directoryList,loc));
@@ -308,19 +325,17 @@ int main(int argc, char* argv[]) {
     pthread_cond_broadcast(&start);
 
     // Wait untill all threads are finished
-    pthread_mutex_lock(&finishMutex);
     pthread_cond_wait(&start,&finishMutex);
-
+    perror("starting free");
     // All threads are finished, sets them free so they can exit. only main changes threadsleeplist.
-    for (i = 0; i < sleeping; i++){
+    for (i = 0; i < sleeping -1; i++){
         pthread_cond_signal(&cvArray[threadSleepList ->head->id]);
+        printf("freeing %d", threadSleepList ->head->id);
         removeThreadNode(threadSleepList,0);
-        perror("Z");
     }
     for (i = 0; i < threadNum; i++) {
         pthread_join(threads[i], NULL);
     }
-    perror("DID I GET HERE?");
     // Clean up and exit
     pthread_mutex_destroy(&startMutex);
     pthread_mutex_destroy(&dirMutex);
