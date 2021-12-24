@@ -134,36 +134,58 @@ int add_thread_node(thead * head,int id){
     return 1;
 }
 
-void remove_directory_node(dhead * head) {
-    directoryNode * tmp = head -> head;
+int getThreadLocation(thead * head,int num) {
+    int loc = 0;
+    threadNode * node = head -> head;
+    while ((node -> id) != num ){
+        node = node -> prev;
+        loc++;
+    }
+    return loc;
+}
+
+char * remove_directory_node(dhead * head,int place) {
+    directoryNode * tmp = head->head;
     head -> size -=1;
-    if (head -> head == head -> tail) {
+    while (place > 0){
+        tmp = tmp -> prev;
+    }
+    if (head -> size == 0) {
         head -> head = NULL;
         head -> tail = NULL;
-        free(tmp);
-
-        return;
     }
-
-    head -> head = tmp -> prev;
-    head -> head -> next = NULL;
-    free(tmp);
+    else if (tmp == head -> head) {
+        head -> head = tmp -> prev;
+        head -> head -> next = NULL;
+    }
+    else if (tmp == head -> tail) {
+        tmp -> next -> prev =NULL;
+        head -> tail = tmp -> next;
+    }
+    return tmp -> path;
 }
 
-void removeThreadNode(thead * head) {
+
+int removeThreadNode(thead * head, int place) {
     threadNode * tmp = head ->head;
-    head -> size -= 1;
-    if (head -> head == head -> tail) {
+    head -> size -=1;
+    while (place > 0){
+        tmp = tmp -> prev;
+    }
+    if (head -> size == 0) {
         head -> head = NULL;
         head -> tail = NULL;
-        free(tmp);
-        return;
     }
-    head -> head = tmp -> prev;
-    head -> head -> next = NULL;
-    free(tmp);
+    else if (tmp == head -> head) {
+        head -> head = tmp -> prev;
+        head -> head -> next = NULL;
+    }
+    else if (tmp == head -> tail) {
+        tmp -> next -> prev =NULL;
+        head -> tail = tmp -> next;
+    }
+    return tmp -> id;
 }
-
 
 void searchDir(char * path) {
 
@@ -172,19 +194,16 @@ void searchDir(char * path) {
 void * startDirCheck(void* num) {
     long my_id = (long) num;
     char path[PATH_MAX];
+    int loc;
 
     pthread_mutex_lock(&threadMutex);
     sleeping++;
     pthread_cond_wait(&start,&threadMutex);
     sleeping--;
-    //if ((!isDirQEmpty(directoryList)) && pthread_mutex_trylock(&threadMutex)) {
-     //   perror("ONE TIME");
-      //  strcpy(path, directoryList->head->path);
-        //remove_directory_node(directoryList);
-        //pthread_mutex_unlock(&threadMutex);
-        //searchDir(path);
-    //}
+    pthread_mutex_unlock(&threadMutex);
+
     while ((dead + sleeping != threadNum) || (!isDirQEmpty(directoryList))) {
+        pthread_mutex_lock(&threadMutex);
         add_thread_node(threadSleepList,my_id);
         pthread_mutex_unlock(&threadMutex);
         if (isDirQEmpty(directoryList)) {
@@ -195,7 +214,6 @@ void * startDirCheck(void* num) {
                 pthread_cond_signal(&start);
                 break;
             }
-
             pthread_cond_wait(&cvArray[my_id],&threadMutex);
             // Need to break to exit properly. Checks if main set the thread free
             if (dead + sleeping == threadNum && isDirQEmpty(directoryList)) {
@@ -203,51 +221,33 @@ void * startDirCheck(void* num) {
             }
             sleeping--;
             pthread_mutex_lock(&removeMutex);
-            removeThreadNode(threadSleepList);
-            strcpy(path, directoryList->head->path);
-            remove_directory_node(directoryList);
+            loc = getThreadLocation(threadSleepList,my_id);
+            removeThreadNode(threadSleepList,loc);
+            strcpy(path, remove_directory_node(directoryList,loc));
             pthread_mutex_unlock(&removeMutex);
             searchDir(path);
         }
         else {
             pthread_mutex_lock(&removeMutex);
-            removeThreadNode(threadSleepList);
-            strcpy(path, directoryList->head->path);
-            remove_directory_node(directoryList);
+            loc = getThreadLocation(threadSleepList,my_id);
+            if (loc > directoryList -> size){
+                sleeping++;
+                pthread_cond_wait(&cvArray[my_id],&removeMutex);
+                if (dead + sleeping == threadNum && isDirQEmpty(directoryList)) {
+                    break;
+                }
+                sleeping--;
+                loc = getThreadLocation(threadSleepList,my_id);
+            }
+            removeThreadNode(threadSleepList,loc);
+            strcpy(path, remove_directory_node(directoryList,loc));
             pthread_mutex_unlock(&removeMutex);
             searchDir(path);
         }
     }
     pthread_exit(0);
 }
-    /*
-    // Fist run, 1 gets the file, the rest go to sleep
-    if (firstRun) {
-        // Add to thread sleeping list
-        pthread_mutex_lock(threadMutex);
-        add_thread_node(threadSleepList,my_id);
-        pthread_mutex_unlock(threadMutex);
-        if (threadSleepList -> head -> id == my_id) {
-            pthread_cond_wait(isHeadCV);
-        }
-        else {
-            pthread_cond_wait(isNotHeadCV);
-        }
-    }
-    else {
-        firstRun = 1;
 
-
-
-    }
-    while (isEveryOneWorking){
-        while (!isDirQEmpty()){
-            //searchDir()
-        }
-    }
-    return 0;
-}
-*/
 int main(int argc, char* argv[]) {
     long i;
     pthread_mutex_init(&dirMutex, NULL);
@@ -314,7 +314,7 @@ int main(int argc, char* argv[]) {
     // All threads are finished, sets them free so they can exit. only main changes threadsleeplist.
     for (i = 0; i < sleeping; i++){
         pthread_cond_signal(&cvArray[threadSleepList ->head->id]);
-        removeThreadNode(threadSleepList);
+        removeThreadNode(threadSleepList,0);
         perror("Z");
     }
     for (i = 0; i < threadNum; i++) {
