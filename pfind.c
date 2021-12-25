@@ -119,6 +119,7 @@ int add_directory_node(dhead * head, char * fullPath) {
     strcpy(new_node -> path,fullPath);
     new_node -> prev = NULL;
     head -> size +=1;
+    // Checks if there is a thread sleeping that should wake up, in the order requested
     if (threadSleepList -> size >= head -> size) {
         pthread_cond_signal(&cvArray[getThreadInIndex(threadSleepList,head ->size-1) -> id]);
     }
@@ -210,11 +211,13 @@ int killThread(pthread_mutex_t * mutextounlock) {
     if (mutextounlock != NULL) {
         pthread_mutex_unlock(mutextounlock);
     }
+    // Main should change exit code to 1
     exitcode = 1;
     pthread_exit(NULL);
 }
 
 void searchDir(char * path) {
+    // Parallel search on different folders.
     DIR * dir;
     DIR * dir_check;
     struct dirent *entry;
@@ -240,6 +243,7 @@ void searchDir(char * path) {
                 dir_check = opendir(fullpath);
                 if (dir_check == NULL) {
                     printf("Directory %s: Permission denied.\n", fullpath);
+                    closedir(dir);
                     errno = 0;
                     continue;
                 }
@@ -271,6 +275,7 @@ void * startDirCheck(void* num) {
     long my_id = (long) num;
     char path[PATH_MAX];
     int loc;
+    // Makes sure main doesn't start when none of the threads are at wait
     pthread_mutex_lock(&startMutex);
     dontStart++;
     pthread_cond_wait(&start,&startMutex);
@@ -282,7 +287,7 @@ void * startDirCheck(void* num) {
         if (!(add_thread_node(threadSleepList,my_id))) {
             killThread(&addRemoveMutex);
         }
-        // Need to know how to deal with new thread in the list, does he needs
+        // Need to know how to deal with new thread in the list
         // other threads can't change lists until we know what to do.
         if (isDirQEmpty(directoryList)) {
             // Needs to go to sleep
@@ -339,15 +344,18 @@ void * startDirCheck(void* num) {
 int main(int argc, char* argv[]) {
     long i;
     long j;
+
     pthread_mutex_init(&startMutex,NULL);
     pthread_mutex_init(&addRemoveMutex, NULL);
     pthread_mutex_init(&finishMutex,NULL);
     pthread_cond_init(&start,NULL);
+
     if (argc != 4) {
         errno = EINVAL;
         perror("There should be 3 paramaters");
         exit(1);
     }
+
     threadNum = atol(argv[3]);
     strcpy(searchTerm,argv[2]);
     DIR * check_dir = opendir(argv[1]);
@@ -396,9 +404,10 @@ int main(int argc, char* argv[]) {
 
     pthread_cond_broadcast(&start);
 
-    // Wait untill all threads are finished
+    // Wait until all threads are finished
     pthread_cond_wait(&start,&finishMutex);
     printf("Done searching, found %d files\n",numFound);
+
     // All threads are finished, sets them free so they can exit. only main changes threadsleeplist.
     for (j = 0; j < sleeping -1; j++){
         pthread_mutex_lock(&addRemoveMutex);
@@ -408,7 +417,7 @@ int main(int argc, char* argv[]) {
     for (j = 0; j < threadNum; j++) {
         pthread_join(threads[j], NULL);
     }
-    // Clean up and exit
+    // Cleanup and exit
     pthread_mutex_destroy(&startMutex);
     pthread_mutex_destroy(&addRemoveMutex);
     pthread_mutex_destroy(&finishMutex);
